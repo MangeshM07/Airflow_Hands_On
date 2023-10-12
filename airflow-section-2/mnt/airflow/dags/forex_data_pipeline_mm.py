@@ -17,7 +17,7 @@ with DAG("forex_data_pipeline",
          start_date= datetime(2021, 1, 1), 
          schedule_interval = "@daily", 
          default_args= default_args, 
-         catchup=False) as dag:
+         catchup=False ) as dag:
     
     is_forex_rates_available = HttpSensor(
         task_id="is_forex_rates_available",
