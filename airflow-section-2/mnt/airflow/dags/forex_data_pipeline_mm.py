@@ -2,6 +2,7 @@ from airflow import DAG
 from airflow.providers.http.sensors.http import HttpSensor
 from airflow.sensors.filesystem import FileSensor
 from airflow.operators.python import PythonOperator
+from airflow.operators.bash import BashOperator
 from datetime import datetime, timedelta
 
 import csv, requests, json
@@ -75,4 +76,14 @@ with DAG("forex_data_pipeline",
         python_callable=download_rates
     )
 
+    # Save the forex rates in HDFS
+    # to open HUE : localhost:32762 root root
+    saving_rates = BashOperator(
+        task_id="saving_rates"
+        bash_command="""
+            hdfs dfs -mkdir -p /forex && \
+            hdfc dfs -put -f $AIRFLOW_HOME/dags/files/forex_rates.json /forex
+        """
+
+    )
     
