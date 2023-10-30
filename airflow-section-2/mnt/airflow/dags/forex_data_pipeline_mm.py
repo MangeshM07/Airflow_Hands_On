@@ -4,6 +4,10 @@ from airflow.sensors.filesystem import FileSensor
 from airflow.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
 from airflow.providers.apache.hive.operators.hive import HiveOperator
+from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
+from airflow.providers.slack.operators.slack_webhook import SlackWebhookOperator
+from airflow.operators.email import EmailOperator
+
 from datetime import datetime, timedelta
 
 import csv, requests, json
@@ -38,6 +42,9 @@ def download_rates():
             with open('/opt/airflow/dags/files/forex_rates.json', 'a') as outfile:
                 json.dump(outdata, outfile)
                 outfile.write('\n')
+
+def _get_message() -> str:
+    return "Hi from forex_data_pipeline"
 
 with DAG("forex_data_pipeline", 
          start_date= datetime(2021, 1, 1), 
@@ -117,3 +124,57 @@ with DAG("forex_data_pipeline",
     # login= hive
     # password= hive
     # port = 10000
+
+    # Process forex rates with spark
+    forex_processing = SparkSubmitOperator(
+        task_id = "forex_processing",
+        application = "/opt/airflow/dags/scripts/forex_processing.py",
+        conn_id = "spark_conn",
+        verbose=False
+    )
+
+    # to create spark connection
+    # open airflow in browser localhost:8080
+    # admin -> connections -> +  
+    # conn_id = spark_conn
+    # conn_type = spark
+    # host = spark://spark-master
+    # port = 7077
+
+    # Send an email notification
+        # configure emai provider
+            # Open https://security.google.com/settings/security/apppasswords
+            # select app -> mail   device--> windows
+            # generate
+            # /mnt/airflow.cfg
+            # search smtp
+            # smtp_host = smtp.gmail.com
+            # smtp_user = gmail address
+            # smtp_password = generated password
+            # smtp_mail_from = your email address
+            # restart airflow instance
+            # docker-compsoe restart airflow
+    send_email_notification = EmailOperator(
+        task_id = "send_email_notification",
+        to="airflow_course@yopmail.com",
+        subject = "forex_data_pipeline",
+        html_content = "<h3>forex_data_pipeline</h3>"
+    )
+  
+    # Send a slack notification
+    send_slack_notification = SlackWebhookOperator(
+        task_id = 'send_slack_notification',
+        http_conn_id = "slack_conn",
+        message= _get_message(),
+        channel = "#monitoring"
+    )
+    # to create slack connection
+    # open airflow in browser localhost:8080
+    # admin -> connections -> +  
+    # conn_id = slack_conn
+    # conn_type = HTTP
+    # password = wehbhook url
+
+    is_forex_rates_available >> is_forex_currencies_file_available >> downloading_rates >> saving_rates
+    saving_rates >> creating_forex_rates_table >> forex_processing >> send_email_notification
+    send_email_notification >> send_slack_notification
